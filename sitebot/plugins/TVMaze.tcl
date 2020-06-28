@@ -153,7 +153,10 @@ namespace eval ::ngBot::plugin::TVMaze {
 		variable scriptName
 		variable scriptFile
 
-		# If string length nonzero, we require TclCurl
+		if {[catch {package require json 1.2}]} {
+			${ns}::Error "\"json\" package not found, unloading script."
+			return -code -1
+		}
 		if {[string length $tvmaze(proxyhost)]} {
 			if {[catch {package require TclCurl}]} {
 				${ns}::Error "\"TclCurl\" package not found, unloading script."
@@ -368,7 +371,6 @@ namespace eval ::ngBot::plugin::TVMaze {
 
 		regsub -all -- {[\._]} $show_str " " show_str
 		set show_str [string trim $show_str]
-
 		array set info [${ns}::GetShowAndEpisode $show_str $episode_season $episode_number]
 
 		foreach key $output_order {
@@ -383,59 +385,86 @@ namespace eval ::ngBot::plugin::TVMaze {
 		return $logData
 	}
 
-	proc GetShowAndEpisode {show season epnumber} {
+	proc GetShowAndEpisode {show season epnumber {year ""} {country ""}} {
 		variable tvmaze
-
-		set data [GetFromApi "https://api.tvmaze.com/singlesearch/shows?embed%5b%5d=previousepisode&embed%5b%5d=nextepisode&q=" $show]
+		regexp {(.*)\s(19[4-9][0-9]|20[0-1][0-9])$} $show -> show year
+		regexp {(.*)\s(AU|US|CA|UK|NZ)$} $show -> show country
+		set data [GetFromApi "https://api.tvmaze.com/search/shows?q=" $show]
 		if {[string equal "Connection" [string range $data 0 9]]} {
 			return -code error $data
 		}
-
+		catch {regsub -all -- {^\[|\]$} $data "" data}
+		catch {regsub -all -- {\}\,\{} $data "\}\{" data}
 		set matches [regexp -inline -nocase -all -- {\"name\":\"(.*?)\"} $data]
 		if {[string length $matches] == 0} {
 			return -code error "No results found for \"$show\""
 		}
+		set data [::json::many-json2dict $data]
+		set matches ""
+		for {set i 0} {$i < [llength $data]} {incr i} {
+			if {$year == "" && $country == ""} {
+				set data [lindex $data 0]
+				set matches 1
+				break
+			}
+			if {$year != ""} {
+				set mazeyr [lindex [split [dict get [dict get [lindex $data $i] show] premiered] -] 0]
+				if {$mazeyr == $year} {
+					set data [lindex $data $i]
+					set matches 1
+					break
+				}
+			}
+			if {$country != ""} {
+				if {$country == "UK"} {set country GB}
+				set mazecn [dict get [dict get [dict get [dict get [lindex $data $i] show] network] country] code]
+				if {$mazecn == $country} {
+					set data [lindex $data $i]
+					set matches 1
+					break
+				}
+			}
+		}
+		if {$matches != 1} {
+			return -code error "No results found for \"$show\""
+		}
+		set info(show_id) [dict get [dict get $data show] id]
+		set info(show_name) [dict get [dict get $data show] name]
+		set info(show_url) [regsub "http" [dict get [dict get $data show] url] "https"]
+		set info(show_status) [dict get [dict get $data show] status]
+		set info(show_premiered) [dict get [dict get $data show] premiered]
+		set info(show_type) [dict get [dict get $data show] type]
+		set info(show_runtime) [dict get [dict get $data show] runtime]
+		set info(show_rating) [dict get [dict get [dict get $data show] rating] average]
 
-		regexp {\"id\":(\d+)} $data -> info(show_id)
-		regexp {\"name\":\"(.*?)\"} $data -> info(show_name)
-		regexp {\"url\":\"(.*?)\"} $data -> info(show_url)
-		set info(show_url) [regsub "http" $info(show_url) "https"]
-		regexp {\"status\":\"(.*?)\"} $data -> info(show_status)
-		regexp {\"country\":.*?\"code\":\"(.*?)\"} $data -> info(show_country)
-		regexp {\"premiered\":\"(.*?)\"} $data -> info(show_premiered)
-		regexp {\"type\":\"(.*?)\"} $data -> info(show_type)
-		regexp {\"runtime\":(\d+)} $data -> info(show_runtime)
-		regexp {\"rating\":\{\"average\":(\d+(\.\d+)?)} $data -> info(show_rating)
-
-		# use webchan or network as "show_network"
-		if {[regexp {\"network\":null,} $data] && ![regexp {\"webChannel\":null,} $data]} {
-			regexp {\"webChannel\":.*?\"name\":\"(.*?)\",\"} $data -> info(show_network)
-		} elseif {![regexp {\"network\":null,} $data] && [regexp {\"webChannel\":null,} $data]} {
-			regexp {\"network\":.*?\"name\":\"(.*?)\"} $data -> info(show_network)
+		if {[dict exists [dict get $data show] network] && [dict get [dict get $data show] network] != "null"} {
+			set info(show_country) [dict get [dict get [dict get [dict get $data show] network] country] code]
+			set info(show_network) [dict get [dict get [dict get $data show] network] name]
+		} elseif {[dict exists [dict get $data show] webChannel] && [dict get [dict get $data show] webChannel] != "null"} {
+			if {[dict get [dict get [dict get $data show] webChannel] country] != "null"} {
+				set info(show_country) [dict get [dict get [dict get [dict get $data show] webChannel] country] code]
+			} else {
+				set info(show_country) "EARTH"
+			}
+			set info(show_network) [dict get [dict get [dict get $data show] webChannel] name]
 		}
 
+
+
 		# genre(s)
-		regexp {\"genres\":\[(\".+?)\]} $data -> show_genres
+		set show_genres [dict get [dict get $data show] genres]
 		if {[info exists show_genres]} {
-			set info(show_genres) [list]
-			foreach genre [split $show_genres ","] {
-				lappend info(show_genres) [string range [string trim $genre] 1 end-1]
-			}
+			set info(show_genres) $show_genres
 			set info(show_genres) [join $info(show_genres) $tvmaze(splitter)]
 		}
 
 		# air day(s) time
-		regexp {\"schedule\":\{\"time\":\"(\d.*?)\"} $data -> show_airtime
-		regexp {\"schedule\":.*?\"days\":\[(\".*?)\]} $data -> show_airdays
+		set show_airtime [dict get [dict get [dict get $data show] schedule] time]
+		set show_airdays [dict get [dict get [dict get $data show] schedule] days]
 
 		# day(s) present
 		if {[info exists show_airdays]} {
-			set info(show_airtime) [list]
-			foreach day [split $show_airdays ","] {
-				lappend info(show_airtime) [string range [string trim $day] 1 end-1]
-			}
-
-			# with time available
+			set info(show_airtime) $show_airdays
 			if {[info exists show_airtime]} {
 				set info(show_airtime) "[join $info(show_airtime) $tvmaze(splitter)] $show_airtime"
 			# no time available, join only days
@@ -454,13 +483,12 @@ namespace eval ::ngBot::plugin::TVMaze {
 		}
 
 		# ended year
+		set data [GetFromApi "https://api.tvmaze.com/shows/${info(show_id)}?embed%5b%5d=previousepisode&embed%5b%5d=nextepisode" ""]
 		set show_embedded ""
 		regexp {\"_embedded\":(.*)} $data -> show_embedded
-
 		# latest episode
 		regexp {\"previousepisode\":.*?\"name\":\"(.*?)\",\"} $show_embedded -> info(show_latest_title)
 		regexp {\"previousepisode\":.*?\"airdate\":\"(.*?)\"} $show_embedded -> info(show_latest_airdate)
-
 		# merge episode Ep/Season
 		regexp {\"previousepisode\":.*?\"season\":(\d+),} $show_embedded -> show_latest_episode_season
 		regexp {\"previousepisode\":.*?\"number\":(\d+),} $show_embedded -> show_latest_episode_number
@@ -511,7 +539,6 @@ namespace eval ::ngBot::plugin::TVMaze {
 				set info(episode_season_episode) "${episode_season}${episode_number}"
 			}
 		}
-
 		return [array get info]
 	}
 
@@ -523,12 +550,6 @@ namespace eval ::ngBot::plugin::TVMaze {
 
 		if {[string length $tvmaze(proxyhost)]} {
 			if {![string equal "" "$query"]} {
-				set uri "$uri[curl::escape $query]"
-			}
-			curl::transfer -url "$uri" -proxy $tvmaze(proxyhost):$tvmaze(proxyport) -proxytype $tvmaze(proxytype) -proxyuserpwd $tvmaze(proxyuser):$tvmaze(proxypass) -useragent $tvmaze(useragent) -bodyvar token -timeoutms $tvmaze(timeout)
-			set data $token
-		} else {
-			if {![string equal "" "$query"]} {
 				# Verify if we can use quoteString or the older mapReply
 				# else fallback to the original formatQuery
 				# Use "commands" as quoteString is an alias (of mapReply)
@@ -539,6 +560,12 @@ namespace eval ::ngBot::plugin::TVMaze {
 				} else {
 					set uri "$uri[::http::formatQuery $query]"
 				}
+			}
+			curl::transfer -url "$uri" -proxy $tvmaze(proxyhost):$tvmaze(proxyport) -proxytype $tvmaze(proxytype) -proxyuserpwd $tvmaze(proxyuser):$tvmaze(proxypass) -useragent $tvmaze(useragent) -bodyvar token -timeoutms $tvmaze(timeout)
+			set data $token
+		} else {
+			if {![string equal "" "$query"]} {
+				set uri "$uri[::http::formatQuery $query]"
 			}
 			::http::config -useragent $tvmaze(useragent)
 			::http::register https 443 [list ::tls::socket -autoservername true]
