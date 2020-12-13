@@ -565,7 +565,16 @@ namespace eval ::ngBot::plugin::TVMaze {
 			set data $token
 		} else {
 			if {![string equal "" "$query"]} {
-				set uri "$uri[::http::formatQuery $query]"
+				# Verify if we can use quoteString or the older mapReply
+				# else fallback to the original formatQuery
+				# Use "commands" as quoteString is an alias (of mapReply)
+				if {[string length [info commands ::http::quoteString]]} {
+					set uri "$uri[::http::quoteString $query]"
+				} elseif {[string length [info procs ::http::mapReply]]} {
+					set uri "$uri[::http::mapReply $query]"
+				} else {
+					set uri "$uri[::http::formatQuery $query]"
+				}
 			}
 			::http::config -useragent $tvmaze(useragent)
 			::http::register https 443 [list ::tls::socket -autoservername true]
