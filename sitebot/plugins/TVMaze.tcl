@@ -389,7 +389,7 @@ namespace eval ::ngBot::plugin::TVMaze {
 
 	proc GetShowAndEpisode {show season epnumber {year ""} {country ""}} {
 		variable tvmaze
-		regexp {(.*)\s(19[4-9][0-9]|20[0-1][0-9])$} $show -> show year
+		regexp {(.*)\s(19[4-9][0-9]|20[0-2][0-9])$} $show -> show year
 		regexp {(.*)\s(AU|US|CA|UK|NZ)$} $show -> show country
 		set data [GetFromApi "https://api.tvmaze.com/search/shows?q=" $show]
 		if {[string equal "Connection" [string range $data 0 9]]} {
