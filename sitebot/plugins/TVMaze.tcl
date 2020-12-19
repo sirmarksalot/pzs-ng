@@ -440,14 +440,14 @@ namespace eval ::ngBot::plugin::TVMaze {
 		if {$matches != 1} {
 			return -code error "No results found for \"$show\""
 		}
-		set info(show_id) [dict get [dict get $data show] id]
+		regexp {(\d+)} [dict get [dict get $data show] id] -> info(show_id)
 		set info(show_name) [dict get [dict get $data show] name]
 		set info(show_url) [regsub "http" [dict get [dict get $data show] url] "https"]
 		set info(show_status) [dict get [dict get $data show] status]
 		set info(show_premiered) [dict get [dict get $data show] premiered]
 		set info(show_type) [dict get [dict get $data show] type]
-		set info(show_runtime) [dict get [dict get $data show] runtime]
-		set info(show_rating) [dict get [dict get [dict get $data show] rating] average]
+		regexp {(\d+)} [dict get [dict get $data show] runtime] -> info(show_runtime)
+		regexp {(\d+(\.\d+)?)} [dict get [dict get [dict get $data show] rating] average] -> info(show_rating)
 
 		if {[dict exists [dict get $data show] network] && [dict get [dict get $data show] network] != "null"} {
 			set info(show_country) [dict get [dict get [dict get [dict get $data show] network] country] code]
