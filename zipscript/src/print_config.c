@@ -172,6 +172,27 @@ printf("#define audio_language_path                       %s\n", stringify(audio
 #ifndef audio_language_sort_is_defaulted
 printf("#define audio_language_sort                       %s\n", (audio_language_sort == FALSE ? "FALSE" : "TRUE"));
 #endif
+#ifndef audio_sort_flac_separate
+printf("#define audio_sort_flac_separate                  %s\n", (audio_sort_flac_separate == FALSE ? "FALSE" : "TRUE"));
+#endif
+#ifndef audio_genre_path_flac
+printf("#define audio_genre_path_flac                     %s\n", stringify(audio_genre_path_flac));
+#endif
+#ifndef audio_artist_path_flac
+printf("#define audio_artist_path_flac                    %s\n", stringify(audio_artist_path_flac));
+#endif
+#ifndef audio_year_path_flac
+printf("#define audio_year_path_flac                      %s\n", stringify(audio_year_path_flac));
+#endif
+#ifndef audio_group_path_flac
+printf("#define audio_group_path_flac                     %s\n", stringify(audio_group_path_flac));
+#endif
+#ifndef audio_language_path_flac
+printf("#define audio_language_path_flac                  %s\n", stringify(audio_language_path_flac));
+#endif
+#ifndef audio_artist_nosub
+printf("#define audio_artist_nosub                        %s\n", (audio_artist_nosub == FALSE ? "FALSE" : "TRUE"));
+#endif
 #ifndef audio_nocheck_dirs_is_defaulted
 printf("#define audio_nocheck_dirs                        %s\n", stringify(audio_nocheck_dirs));
 #endif
@@ -988,6 +1009,13 @@ printf("#define audio_year_check                          %s\n", (audio_year_che
 printf("#define audio_year_path                           %s\n", stringify(audio_year_path));
 printf("#define audio_year_sort                           %s\n", (audio_year_sort == FALSE ? "FALSE" : "TRUE"));
 printf("#define audio_year_warn                           %s\n", (audio_year_warn == FALSE ? "FALSE" : "TRUE"));
+printf("#define audio_sort_flac_separate                  %s\n", (audio_sort_flac_separate == FALSE ? "FALSE" : "TRUE"));
+printf("#define audio_genre_path_flac                     %s\n", stringify(audio_genre_path_flac));
+printf("#define audio_artist_path_flac                    %s\n", stringify(audio_artist_path_flac));
+printf("#define audio_year_path_flac                      %s\n", stringify(audio_year_path_flac));
+printf("#define audio_group_path_flac                     %s\n", stringify(audio_group_path_flac));
+printf("#define audio_language_path_flac                  %s\n", stringify(audio_language_path_flac));
+printf("#define audio_artist_nosub                        %s\n", (audio_artist_nosub == FALSE ? "FALSE" : "TRUE"));
 printf("#define banned_filelist                           %s\n", stringify(banned_filelist));
 printf("#define banned_genres                             %s\n", stringify(banned_genres));
 printf("#define benchmark_mode                            %s\n", (benchmark_mode == FALSE ? "FALSE" : "TRUE"));

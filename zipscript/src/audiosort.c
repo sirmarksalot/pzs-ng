@@ -16,6 +16,55 @@
 #include "zsfunctions.h"
 #include "audiosort.h"
 #include "multimedia.h"
+#include "helpfunctions.h"
+
+/*
+#define audio_sort_flac_separate     TRUE
+#define audio_genre_path_flac        "/site/index/flac/music.by.genre/"
+#define audio_artist_path_flac       "/site/index/flac/music.by.artist/"
+#define audio_year_path_flac         "/site/index/flac/music.by.year/"
+#define audio_group_path_flac        "/site/index/flac/music.by.group/"
+#define audio_language_path_flac     "/site/index/flac/music.by.language/"
+#define audio_artist_nosub           TRUE
+*/
+
+
+
+/*
+reutrns 0 if no bad chars found and 1st char is not digit
+returns 1 if no bad chars found and 1st char is digit
+returns 2 if bad chars found and 1st char is not digit
+returns 3 if bad chars found and 1st char is digit
+*/
+int allowedcharscheck(char *temp_p, char *link_target)
+{
+	const char *allowed = ",&'._-()0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	const char *numeric = "0123456789";
+	const char *initalchar = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	if (!strchr(initalchar, *temp_p)) {
+		if (strchr(numeric, *link_target)) {
+			return 3;
+		} else {
+			return 2;
+		}
+	}
+	char *c = temp_p;
+	while (*c) {
+		if (!strchr(allowed, *c)) {
+			if (strchr(numeric, *temp_p)) {
+				return 3;
+			} else {
+				return 2;
+			}
+		}
+		c++;
+	}
+	if (strchr(numeric, *temp_p)) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
 
 void audioSortDir(char *targetDir)
 {
@@ -66,6 +115,9 @@ void audioSort(struct audio *info, char *link_source, char *link_target)
 	int n = 0;
  #if (audio_artist_sort == TRUE) || (audio_group_sort == TRUE) || (audio_language_sort == TRUE)
 	char *temp_p = NULL;
+	char temp_pp[PATH_MAX];
+	char dualpath[PATH_MAX];
+	int allowed;
   #if (audio_language_sort == TRUE)
 	char language[3];
   #endif
@@ -93,7 +145,15 @@ void audioSort(struct audio *info, char *link_source, char *link_target)
 
 #if ( audio_genre_sort == TRUE )
 	d_log("audioSort:   Sorting audio by genre (%s)\n", info->id3_genre);
-	createlink(audio_genre_path, info->id3_genre, link_source, link_target);
+	#if ( audio_sort_flac_separate == TRUE )
+		if (strncasecmp(info->codec, "FLAC", 4) == 0 ) {
+			createlink(audio_genre_path_flac, info->id3_genre, link_source, link_target);
+		} else {
+			createlink(audio_genre_path, info->id3_genre, link_source, link_target);
+		}
+	#else
+		createlink(audio_genre_path, info->id3_genre, link_source, link_target);
+	#endif
 #endif
 
 
@@ -105,7 +165,15 @@ void audioSort(struct audio *info, char *link_source, char *link_target)
  #if ( audio_artist_sort_various_only == TRUE )
 			memcpy(info->id3_artist, "VA", 3);
  #endif
-			createlink(audio_artist_path, "VA", link_source, link_target);
+			#if ( audio_sort_flac_separate == TRUE )
+				if (strncasecmp(info->codec, "FLAC", 4) == 0 ) {
+					createlink(audio_artist_path_flac, "VA", link_source, link_target);
+				} else {
+					createlink(audio_artist_path, "VA", link_source, link_target);
+				}
+			#else
+				createlink(audio_artist_path, "VA", link_source, link_target);
+			#endif
 		}
 		if (memcmp(info->id3_artist, "VA", 3)) {
 
@@ -125,7 +193,51 @@ void audioSort(struct audio *info, char *link_source, char *link_target)
 			temp_p = check_nocase_linkname(audio_artist_path, temp_p);
 			space_to_dot(temp_p);
  #endif
-			createlink(audio_artist_path, temp_p, link_source, link_target);
+			#if ( audio_sort_flac_separate == TRUE )
+				strcpy(temp_pp, temp_p);
+				allowed = allowedcharscheck(temp_p, link_target);
+				if (strncasecmp(info->codec, "FLAC", 4) == 0 ) {
+					if (allowed == 0) {
+						snprintf(dualpath, sizeof(dualpath), "%s%c", audio_artist_path_flac, toupper(temp_p[0]));
+					} else if (allowed == 1) {
+						snprintf(dualpath, sizeof(dualpath), "%s%s", audio_artist_path_flac, "0-9");
+					} else if (allowed == 2) {
+						char *c = link_target;
+						const char *initalchar = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+						while (!strchr(initalchar, *c)) {
+							c++;
+						}
+						snprintf(temp_p, 2, "%c", toupper(*c));
+						snprintf(dualpath, sizeof(dualpath), "%s", audio_artist_path_flac);
+					} else {
+						snprintf(temp_p, 4, "%s", "0-9");
+						snprintf(dualpath, sizeof(dualpath), "%s", audio_artist_path_flac);
+					}
+					mkdir(dualpath, 0777);
+					createlink(dualpath, temp_p, link_source, link_target);
+				} else {
+					if (allowed == 0) {
+						snprintf(dualpath, sizeof(dualpath), "%s%c", audio_artist_path, toupper(temp_p[0]));
+					} else if (allowed == 1) {
+						snprintf(dualpath, sizeof(dualpath), "%s%s", audio_artist_path, "0-9");
+					} else if (allowed == 2) {
+						char *c = link_target;
+						const char *initalchar = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+						while (!strchr(initalchar, *c)) {
+							c++;
+						}
+						snprintf(temp_p, 2, "%c", toupper(*c));
+						snprintf(dualpath, sizeof(dualpath), "%s", audio_artist_path);
+					} else {
+						snprintf(temp_p, 4, "%s", "0-9");
+						snprintf(dualpath, sizeof(dualpath), "%s", audio_artist_path);
+					}
+					mkdir(dualpath, 0777);
+					createlink(dualpath, temp_p, link_source, link_target);
+				}
+			#else
+				createlink(audio_artist_path, temp_p, link_source, link_target);
+			#endif
 			ng_free(temp_p);
 		}
 	}
@@ -134,8 +246,17 @@ void audioSort(struct audio *info, char *link_source, char *link_target)
 
 #if ( audio_year_sort == TRUE )
 	d_log("audioSort:   Sorting audio by year (%s)\n", info->id3_year);
-	if (*info->id3_year != 0)
-		createlink(audio_year_path, info->id3_year, link_source, link_target);
+	if (*info->id3_year != 0) {
+		#if ( audio_sort_flac_separate == TRUE )
+			if (strncasecmp(info->codec, "FLAC", 4) == 0 ) {
+				createlink(audio_year_path_flac, info->id3_year, link_source, link_target);
+			} else {
+				createlink(audio_year_path, info->id3_year, link_source, link_target);
+			}
+		#else
+			createlink(audio_year_path, info->id3_year, link_source, link_target);
+		#endif
+	}
 #endif
 
 
@@ -156,7 +277,15 @@ void audioSort(struct audio *info, char *link_source, char *link_target)
 		d_log("audioSort:   - Valid groupname found: %s (%i) - checking for exisiting sort-dir.\n", temp_nam, n);
 		temp_p = check_nocase_linkname(audio_group_path, temp_p);
 		d_log("audioSort:   - Valid groupname found: %s (%i) - using this.\n", temp_p, n);
-		createlink(audio_group_path, temp_p, link_source, link_target);
+		#if ( audio_sort_flac_separate == TRUE )
+			if (strncasecmp(info->codec, "FLAC", 4) == 0 ) {
+				createlink(audio_group_path_flac, temp_p, link_source, link_target);
+			} else {
+				createlink(audio_group_path, temp_p, link_source, link_target);
+			}
+		#else
+			createlink(audio_group_path, temp_p, link_source, link_target);
+		#endif
 	}
 #endif
 
@@ -179,10 +308,18 @@ void audioSort(struct audio *info, char *link_source, char *link_target)
 	}
 	if (language[0] != '\0' && !strcomp(audio_ignored_languages, language)) {
 		d_log("audioSort:   - Valid language found: %s\n", language);
-		createlink(audio_language_path, temp_p, link_source, link_target);
-	} else
+		#if ( audio_sort_flac_separate == TRUE )
+			if (strncasecmp(info->codec, "FLAC", 4) == 0 ) {
+				createlink(audio_language_path_flac, temp_p, link_source, link_target);
+			} else {
+				createlink(audio_language_path, temp_p, link_source, link_target);
+			}
+		#else
+			createlink(audio_language_path, temp_p, link_source, link_target);
+		#endif
+	} else {
 		d_log("audioSort:   - No valid language found - skipping.\n");
-
+	}
 #endif
 }
 
